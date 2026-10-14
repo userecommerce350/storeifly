@@ -38,7 +38,7 @@ export const getCategories = async (req: Request, res: Response): Promise<void> 
         res.json({ success: true, categories });
     } catch (error: any) {
         console.error("getCategories error:", error);
-        res.status(500).json({ success: false, message: error?.message || " failed to fetch categiories" });
+        res.status(500).json({ success: false, message: "Failed to fetch categories" });
     }
 }
 
@@ -50,7 +50,7 @@ export const createCategory = async (req: AuthenticatedRequest, res: Response): 
         }
 
         const { name } = req.body;
-        if (!name?.trim()) {
+        if (typeof name !== "string" || !name.trim()) {
             res.status(400).json({ success: false, message: "Category name is required" });
             return;
         }
@@ -60,7 +60,7 @@ export const createCategory = async (req: AuthenticatedRequest, res: Response): 
         })
     } catch (error: any) {
         console.error("getCategories error:", error);
-        res.status(500).json({ success: false, message: error?.message || " failed to fetch categiories" });
+        res.status(500).json({ success: false, message:"Failed to fetch categiories" });
     }
 }
 
@@ -77,6 +77,6 @@ export const deleteCategory = async (req: AuthenticatedRequest, res: Response): 
         res.json({ success: true, message: "Category deleted successfully" });
     } catch (error: any) {
         console.error("getCategories error:", error);
-        res.status(500).json({ success: false, message: error?.message || " failed to fetch categiories" });
+        res.status(500).json({ success: false, message:"Failed to fetch categiories" });
     }
 }
