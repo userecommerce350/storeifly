@@ -80,3 +80,18 @@ export const findNeonMerchants = async (): Promise<NeonUserRecord[]> => {
         return [];
     }
 };
+
+export const countNeonMerchants = async (): Promise<number> => {
+    try {
+        const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*) as count
+        FROM neon_auth.user
+        WHERE role = 'merchant'
+        `;
+
+        return Number(rows[0]?.count || 0);
+    } catch (e) {
+        console.error(e);
+        return 0;
+    }
+};
