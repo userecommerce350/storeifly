@@ -47,7 +47,7 @@ export const uploadSingle = async (req: Request, res: Response): Promise<void> =
         const url = await uploadToCloudinary(req.file.buffer, "storeifly", {
             mimetype: req.file.mimetype,
             filename: req.file.originalname,
-        }).catch(() => `data:${req.file!.mimetype};base64,${req.file!.buffer.toString("base64")}`);
+        })
 
         res.json({ success: true, url });
 
@@ -71,7 +71,7 @@ export const uploadMultiple = async (req: Request, res: Response): Promise<void>
             files.map((file) => uploadToCloudinary(file.buffer, "storeifly", {
                 mimetype: file.mimetype,
                 filename: file.originalname,
-            }).catch(() => `data:${file.mimetype};base64,${file.buffer.toString("base64")}`))
+            }))
         )
 
         res.json({ success: true, urls });
