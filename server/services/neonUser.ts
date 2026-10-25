@@ -8,33 +8,40 @@ export interface NeonUserRecord {
     createdAt?: Date | null;
 }
 
-export const findNeonUser = async (filter: { id?: string; email?: string }): Promise<NeonUserRecord | null> => {
+export const findNeonUser = async (
+    filter: { id?: string; email?: string }
+): Promise<NeonUserRecord | null> => {
     try {
         if (filter.id) {
             const rows = await prisma.$queryRaw<NeonUserRecord[]>`
-            SELECT id, name, email, role, "createdAt" as "createdAt"
-            FROM neon_auth.user
-            WHEREv id = ${filter.id}::uuid
-            LIMIT 1`;
+                SELECT id, name, email, role, "createdAt"
+                FROM neon_auth."user"
+                WHERE id::text = ${filter.id}
+                LIMIT 1
+            `;
 
-            return rows[0] || null;
+            return rows[0] ?? null;
         }
 
         if (filter.email) {
-            const rows = await prisma.$queryRaw<NeonUserRecord[]>`
-                SELECT id, name, email, role, "createdAt" as "createdAt"
-                FROM neon_auth. user
-                WHERE LOWER(email) = ${filter.email.trim().toLowerCase()}
-                LIMIT 1`
-                ;
+            const normalizedEmail = filter.email.trim().toLowerCase();
 
-            return rows[0] || null;
+            const rows = await prisma.$queryRaw<NeonUserRecord[]>`
+                SELECT id, name, email, role, "createdAt"
+                FROM neon_auth."user"
+                WHERE LOWER(email) = ${normalizedEmail}
+                LIMIT 1
+            `;
+
+            return rows[0] ?? null;
         }
-    } catch (e) {
-        console.error(e);
+
+        return null;
+    } catch (error) {
+        console.error("Error finding Neon user:", error);
+        throw error;
     }
-    return null;
-}
+};
 
 export const updateNeonUserRole = async (userId: string, role: string): Promise<void> => {
     try {

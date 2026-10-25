@@ -119,8 +119,8 @@ const ensureCloudinaryUrl = async (url: string, folder = "storeifly/tryon"): Pro
     if (cloudName && url.includes(`res.cloudinary.com/${cloudName}/`)) {
         return url;
     }
-    const res = await cloudinary.uploader.upload(url, { folder, resource_type: "image" }).catch(() => null)
-    return res?.secure_url || url;
+    const result = await cloudinary.uploader.upload(url, { folder, resource_type: "image" });
+    return result.secure_url;
 }
 
 export interface GenerateOnModelParams {
@@ -148,8 +148,8 @@ export const generateOnModelImage = async (params: GenerateOnModelParams): Promi
     const payload = {
         prompt: params.prompt,
         reference_images: [
-            { source_typr: "url", url: params.modelImageUrl },
-            { source_typr: "url", url: params.productImageUrl },
+            { source_type: "url", url: params.modelImageUrl },
+            { source_type: "url", url: params.productImageUrl },
         ],
         model: { mode: "auto", ...(params.preference ? { performance: params.preference } : {}) },
         target: { target_type: "managed_asset", public_id: targetPublicId }
@@ -231,7 +231,7 @@ export const aiOnModel = async (req: Request, res: Response): Promise<void> => {
             })
 
     } catch (error: any) {
-        console.log(error?.message)
+        console.error("On-model image generation failed:", error);
         res.status(500).json({
             success: false,
             message: "Failed to generate on-model catalog photo",

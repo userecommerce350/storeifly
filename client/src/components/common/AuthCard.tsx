@@ -1,0 +1,260 @@
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth, type User as AuthUserType } from "../../context/AuthContext";
+import { Mail, Lock, User, ArrowRight, Eye, EyeOff, ArrowLeftIcon } from "lucide-react";
+import toast from "react-hot-toast";
+import { authClient } from "../../auth";
+import { api } from "../../config/api";
+
+export interface AuthSuccessData {
+    token: string;
+    user: AuthUserType;
+    store?: any;
+    mode: "login" | "register";
+}
+
+export interface AuthCardProps {
+    role?: "admin" | "merchant" | "customer";
+    initialMode?: "login" | "register";
+    allowRegister?: boolean;
+    storeId?: number | string;
+    storeSlug?: string;
+    onSuccess?: (data: AuthSuccessData) => void;
+}
+
+export const AuthCard: React.FC<AuthCardProps> = ({ role, initialMode = "login", allowRegister = true, storeId, storeSlug, onSuccess }) => {
+    const [mode, setMode] = useState<"login" | "register">(allowRegister ? initialMode : "login");
+    const [form, setForm] = useState({ name: "", email: "", password: "" });
+    const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
+
+    const { login } = useAuth();
+    const navigate = useNavigate();
+
+    const isRegister = allowRegister && mode === "register";
+    const effectiveRole = role || (storeSlug || storeId ? "customer" : "merchant");
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+
+        try {
+            const trimmedEmail = form.email.trim().toLowerCase();
+
+            // 1. Authenticate with Neon Managed Better Auth directly
+            const result = isRegister
+                ? await authClient.signUp.email({
+                    name: form.name.trim() || trimmedEmail.split("@")[0],
+                    email: trimmedEmail,
+                    password: form.password,
+                })
+                :
+                await authClient.signIn.email({
+                    email: trimmedEmail,
+                    password: form.password,
+                });
+
+            if (result.error) {
+                const errMessage = result.error.message || "Authentication failed";
+                if (isRegister && (errMessage.toLowerCase().includes("already") || errMessage.toLowerCase().includes("exist"))) {
+                    toast.error("An account with this email already exists. Switching to Sign In.");
+                    setMode("login");
+                } else {
+                    toast.error(errMessage);
+                }
+                setLoading(false);
+                return;
+            }
+
+            // 2. Obtain session and token from Neon Auth
+            const sessionRes = await authClient.getSession();
+            const activeToken = sessionRes.data?.session?.token || (result.data as any)?.token || (result.data as any)?.session?.token || "";
+
+            const sessionUser = sessionRes.data?.user || result.data?.user;
+
+            if (activeToken) {
+                localStorage.setItem("storeifly_token", activeToken);
+            }
+            // 3. Resolve user profile directly from Neon Auth & store from /api/stores/me
+            let determinedRole: string = effectiveRole;
+            if ((sessionUser as any)?.role === "admin") {
+                determinedRole = "admin";
+            } else if (effectiveRole === "merchant" || (sessionUser as any)?.role === "merchant") {
+                determinedRole = "merchant";
+            } else {
+                determinedRole = "customer";
+            }
+
+            let authStore: any = null;
+
+            // Only non-admin merchants can onboard or have a store
+            if (determinedRole === "merchant") {
+                try {
+                    const onboardRes = await api.post(
+                        "/api/stores/onboard-merchant",
+                        {},
+                        { headers: activeToken ? { Authorization: `Bearer ${activeToken}` } : undefined }
+                    );
+                    if (onboardRes.data?.store) {
+                        authStore = onboardRes.data.store;
+                    }
+                } catch (e) {
+                    console.warn("Could not onboard merchant role:", e);
+                }
+
+                if (!authStore) {
+                    try {
+                        const storeRes = await api.get("/api/stores/me", {
+                            headers: activeToken ? { Authorization: `Bearer ${activeToken}` } : undefined,
+                        });
+                        if (storeRes.data?.success && storeRes.data?.store) {
+                            authStore = storeRes.data.store;
+                        }
+                    } catch {
+                        authStore = null;
+                    }
+                }
+            }
+
+            const authUser: AuthUserType = {
+                id: sessionUser?.id || "user",
+                name: sessionUser?.name || form.name.trim() || trimmedEmail.split("@")[0],
+                email: trimmedEmail,
+                role: determinedRole,
+                store_id: determinedRole === "admin" ? null : (authStore?.id || null),
+            };
+
+            if (!isRegister && effectiveRole === "admin" && authUser.role !== "admin") {
+                toast.error("Access denied: You do not have platform admin privileges");
+                setLoading(false);
+                return;
+            }
+
+            toast.success(isRegister ? "Account created successfully!" : "Signed in successfully!");
+
+            if (onSuccess) {
+                onSuccess({ token: activeToken, user: authUser, store: authStore, mode });
+            } else {
+                login(activeToken, authUser, authStore);
+                if (authUser.role === "admin") {
+                    navigate("/admin");
+                } else if (authUser.role === "merchant" || effectiveRole === "merchant") {
+                    navigate(authStore ? "/merchant" : "/merchant/store-setup");
+                } else if (storeSlug) {
+                    navigate(`/store/${storeSlug}`);
+                } else {
+                    navigate("/");
+                }
+            }
+        } catch (error) {
+            console.error("Authentication error:", error);
+            toast.error(error instanceof Error ? error.message : "Authentication failed. Please check credentials.")
+        } finally {
+            setLoading(false)
+        }
+    };
+
+    const inputClasses =
+        "w-full pl-10 pr-4 py-2.5 text-xs bg-neutral-50/70 border border-neutral-200 rounded-xl focus:outline-none focus:border-[var(--store-accent)] focus:ring-1 focus:ring-[var(--store-accent-ring)] transition text-neutral-900 placeholder-neutral-400";
+
+    return (
+        <div className="w-full max-w-sm bg-white rounded-4xl border border-neutral-200/90 p-8 sm:p-9 shadow-xs">
+            <div className="flex items-center gap-2 mb-4 cursor-pointer" onClick={() => navigate(-1)}>
+                <ArrowLeftIcon className="size-5 text-neutral-600" />
+                <p className="text-xs text-neutral-600 hover:text-neutral-900">Go Back</p>
+            </div>
+
+            <div className="text-center mb-6">
+                <h1 className="text-xl sm:text-2xl tracking-tight text-neutral-900">{isRegister ? "Create Account" : "Welcome Back"}</h1>
+                <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
+                    {isRegister ? "Create an account to get started." : "Enter your credentials to access your account."}
+                </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {isRegister && (
+                    <div>
+                        <label className="block text-xs font-medium text-neutral-700 mb-1.5">Full Name</label>
+                        <div className="relative">
+                            <User className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                            <input
+                                type="text"
+                                required
+                                placeholder="Alex Morgan"
+                                value={form.name}
+                                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                                className={inputClasses}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                <div>
+                    <label className="block text-xs font-medium text-neutral-700 mb-1.5">
+                        {effectiveRole === "admin" ? "Admin Email" : "Email Address"}
+                    </label>
+                    <div className="relative">
+                        <Mail className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                            type="email"
+                            required
+                            placeholder={effectiveRole === "admin" ? "admin@example.com" : "you@example.com"}
+                            value={form.email}
+                            onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                            className={inputClasses}
+                        />
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-medium text-neutral-700 mb-1.5">Password</label>
+                    <div className="relative">
+                        <Lock className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                            type={showPassword ? "text" : "password"}
+                            required
+                            placeholder="••••••••"
+                            value={form.password}
+                            onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+                            className={`${inputClasses} pr-10 font-mono`}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 p-0.5 cursor-pointer"
+                        >
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                    </div>
+                </div>
+
+                <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-2.5 px-5 text-white text-xs font-semibold rounded-full transition disabled:opacity-50 flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-xs active:scale-[0.98] store-accent-btn"
+                >
+                    <span>{loading ? "Please wait..." : isRegister ? "Create Account" : "Sign In"}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+
+                <div className="mt-2">
+                    {!allowRegister ? null : isRegister ? (
+                        <p className="text-xs text-neutral-500 text-center">
+                            Already have an account?{" "}
+                            <span onClick={() => setMode("login")} className="font-semibold cursor-pointer store-accent-text">
+                                Sign In
+                            </span>
+                        </p>
+                    ) : (
+                        <p className="text-xs text-neutral-500 text-center">
+                            Don't have an account?{" "}
+                            <span onClick={() => setMode("register")} className="font-semibold cursor-pointer store-accent-text">
+                                Create Account
+                            </span>
+                        </p>
+                    )}
+                </div>
+            </form>
+        </div>
+    );
+};
