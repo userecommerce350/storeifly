@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, useSearchParams, Navigate } from "react-router-dom";
-import { useAuth, type Store as StoreType } from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 import { Store, ArrowRight, Upload } from "lucide-react";
 import toast from "react-hot-toast";
 import { api } from "../../config/api";
