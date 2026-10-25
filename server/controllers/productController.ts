@@ -18,6 +18,18 @@ export const createProduct = async (req: AuthenticatedRequest, res: Response): P
             return;
         }
 
+        if (category_id) {
+            const category = await prisma.categories.findFirst({
+                where: { id: Number(category_id), store_id: store.id },
+            });
+            if (!category) {
+                res.status(400).json({
+                    success: false, message: "Category not found or access denied"
+                });
+                return;
+            }
+        }
+
         const product = await prisma.products.create({
             data: {
                 store_id: store.id,
@@ -61,6 +73,16 @@ export const updateProduct = async (req: AuthenticatedRequest, res: Response): P
 
         const { name, description, price, compare_at_price, sku, stock, category_id, images, variants, status, } = req.body;
 
+        if (category_id) {
+            const category = await prisma.categories.findFirst({
+                where: { id: Number(category_id), store_id: store.id },
+            });
+            if (!category) {
+                res.status(400).json({ success: false, message: "Category not found or access denied" });
+                return;
+            }
+        }
+
         const updated = await prisma.products.update({
             where: { id: Number(id) },
             data: Object.fromEntries(
@@ -97,14 +119,14 @@ export const deleteProduct = async (req: AuthenticatedRequest, res: Response): P
         }
 
         const deleted = await prisma.products.deleteMany({
-            where: {id: Number(req.params.id), store_id: store.id}
+            where: { id: Number(req.params.id), store_id: store.id }
         })
         if (deleted.count === 0) {
-            res.status(404).json({ success: false, message: "Product Not Found or access denied"});
+            res.status(404).json({ success: false, message: "Product Not Found or access denied" });
             return;
         }
 
-        res.json({ success: true, message: "Product Deleted"})
+        res.json({ success: true, message: "Product Deleted" })
     } catch (error: any) {
         console.error("deleteProduct error:", error);
         res.status(500).json({ success: false, message: "Failed to delete product" });
