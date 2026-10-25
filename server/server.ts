@@ -2,6 +2,7 @@ import "dotenv/config";
 import express, { Request, Response } from 'express';
 import cors from "cors";
 import categoryRouter from "./routes/categoryRoutes.js";
+import uploadRouter from "./routes/uploadRoutes.js";
 
 const app = express();
 
@@ -17,7 +18,8 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // API Router
-app.use("/api/categories", categoryRouter)
+app.use("/api/categories", categoryRouter);
+app.use("/api/upload", uploadRouter);
 
 app.listen(port, () => {
     console.log(`Server is running at http://localhost:${port}`);
